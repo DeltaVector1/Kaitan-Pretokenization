@@ -1,5 +1,5 @@
 
-<img src="https://files.catbox.moe/uja15m.png" alt="description" width="300" height="200">
+<img src="https://files.catbox.moe/uja15m.png" alt="description" width="200" height="200">
 
 # Kaitan Pretokenization
 
