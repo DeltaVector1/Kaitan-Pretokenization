@@ -1,0 +1,34 @@
+[project]
+name = "dantess-pretokenization"
+version = "0.1.0"
+description = "Simple, extensible pretokenization for HuggingFace datasets with multiple chat formats"
+requires-python = ">=3.11"
+dependencies = [
+    "datasets>=2.14.0",
+    "transformers>=4.30.0",
+    "pyarrow>=12.0.0",
+    "pyyaml>=6.0",
+    "colorama>=0.4.6",
+    "questionary>=2.0.0",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+pretokenization = "dantess_pretokenization.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = []
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.1",
+]

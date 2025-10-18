@@ -1,0 +1,9 @@
+base_model: Qwen/Qwen2.5-1.5B-Instruct
+model_type: AutoModelForCausalLM
+tokenizer_type: AutoTokenizer
+
+datasets:
+  - path: PocketDoc/Dans-Systemmaxx
+    type: dan-chat-advanced
+  - path: Delta-Vector/Hydrus-Claude-Instruct-2.7K
+    type: dan-chat-advanced
