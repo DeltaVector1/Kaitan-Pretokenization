@@ -1,26 +1,24 @@
-# Dantess-Pretokenization
 
-Simple, extensible pretokenization for HuggingFace datasets with multiple chat formats.
+<img src="https://files.catbox.moe/uja15m.png" alt="description" width="300" height="200">
 
-## Features
+# Kaitan Pretokenization
 
-- 🚀 **Multiple Chat Formats**: Built-in support for ChatML, GLM4, Llama3, Llama4, and Mistral V7 Tekken
-- 🎨 **Interactive TUI**: Beautiful terminal UI for format selection
-- 👀 **Preview Mode**: See colored preview of tokenization before processing
-- 📦 **Streaming Support**: Process large datasets efficiently with streaming
-- 🔧 **Easily Extensible**: Add new chat formats by creating simple configuration classes
-- ⚡ **Concurrent Processing**: Fast tokenization with ThreadPoolExecutor
+Simple, extensible pretokenization project for HF datasets with multiple chat formats
 
-## Installation
+## Install
 
-This project uses UV for dependency management:
-
+Install UV:
 ```bash
-# Install dependencies
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+Activate a venv:
+```bash
+uv venv
+. .venv/bin/activate
+```
+and then install deps:
+```bash
 uv sync
-
-# Or with pip (after building)
-pip install -e .
 ```
 
 ## Usage
@@ -38,9 +36,9 @@ This will:
 4. Ask for confirmation
 5. Process all datasets and save to `output.parquet`
 
-### Configuration File
+### Yaml File
 
-Create a YAML configuration file (e.g., `testing.yml`):
+Create a YAML configuration file
 
 ```yaml
 base_model: Qwen/Qwen2.5-1.5B-Instruct
@@ -53,7 +51,7 @@ datasets:
   - path: Delta-Vector/Hydrus-Claude-Instruct-2.7K
     type: dan-chat-advanced
 
-sequence_len: 8192  # Optional, defaults to 8192
+sequence_len: 8192  # defaults to 8192
 ```
 
 ### Command Line Options
@@ -88,15 +86,6 @@ uv run pretokenization --config ./testing.yml --debug
 # Push to HuggingFace (requires HF_TOKEN env var)
 uv run pretokenization --config ./testing.yml --hf-push username/dataset-name
 ```
-
-## Available Chat Formats
-
-- **ChatML**: Standard ChatML format (`<|im_start|>`, `<|im_end|>`)
-- **ChatML with BOS Fix**: ChatML with proper BOS token handling
-- **GLM4**: GLM4 chat format with special tokens
-- **Llama3**: Llama3 format with header tags
-- **Llama4**: Llama4 format with updated header tags
-- **Mistral V7 Tekken**: Mistral V7 Tekken format with instruction tags
 
 ## Adding New Chat Formats
 
@@ -189,6 +178,3 @@ uv run ruff format src/
 uv run ruff check src/ --fix
 ```
 
-## License
-
-MIT
