@@ -61,6 +61,17 @@ class Config:
             List of dataset paths
         """
         return [d["path"] for d in self.datasets if d.get("type") == dataset_type]
+    
+    def get_datasets_by_type(self, dataset_type: str) -> list[dict]:
+        """Get full dataset configs filtered by type.
+
+        Args:
+            dataset_type: The dataset type to filter by
+
+        Returns:
+            List of dataset configurations
+        """
+        return [d for d in self.datasets if d.get("type") == dataset_type]
 
     def __repr__(self) -> str:
         return f"Config(base_model={self.base_model}, datasets={len(self.datasets)})"

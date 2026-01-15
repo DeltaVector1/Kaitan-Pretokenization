@@ -72,19 +72,22 @@ def fill_format_tokens(tokenizer: Any, format_tokens: dict[str, dict[str, Any]],
         logger.debug(f"Tokenized turn_seperator: {format_tokens['turn_seperator']['text']} -> {separator_tokens}")
 
 
-def normalize_conversation(item: list[dict], format_obj: Any) -> list[dict]:
+def normalize_conversation(item: list[dict], format_obj: Any, role_field: str = "from") -> list[dict]:
     """Normalize the conversation format.
 
     Args:
         item: List of conversation turns
         format_obj: Format object with role value lists
+        role_field: Name of the field containing the role (default: 'from')
 
     Returns:
         Normalized conversation turns
     """
     for turn in item:
-        from_value = turn["from"].lower()
-
+        # Get role from the appropriate field
+        from_value = turn.get(role_field, "").lower()
+        
+        # Normalize to internal format
         if from_value in format_obj.system_from_values:
             turn["from"] = "system"
         elif from_value in format_obj.user_from_values:
@@ -93,30 +96,64 @@ def normalize_conversation(item: list[dict], format_obj: Any) -> list[dict]:
             turn["from"] = "gpt"
         elif from_value in format_obj.tool_from_values:
             turn["from"] = "tool"
+        else:
+            # Keep the original value if it doesn't match any known values
+            turn["from"] = from_value
 
         if "loss" not in turn or turn["loss"] is None:
             turn["loss"] = turn["from"] == "gpt"
+        
+        # Handle the 'value' field - merge content, function_calls, and functions
+        if "value" not in turn:
+            value_parts = []
+            
+            # Add functions (tool definitions) if present - typically in system messages
+            if turn.get("functions"):
+                value_parts.append(turn["functions"])
+            
+            # Add content if present
+            if turn.get("content"):
+                value_parts.append(turn["content"])
+            
+            # Add function_calls if present - typically in assistant messages
+            if turn.get("function_calls"):
+                value_parts.append(turn["function_calls"])
+            
+            # Join with newline if we have multiple parts
+            if value_parts:
+                turn["value"] = "\n".join(str(p) for p in value_parts)
+            else:
+                turn["value"] = ""
 
     return item
 
 
 def tokenize_item(
-    item: dict, tokenizer: Any, format_tokens: dict, format_obj: Any, max_length: int
+    item: dict, tokenizer: Any, format_tokens: dict, format_obj: Any, max_length: int,
+    conversation_field: str = "conversations", role_field: str = "from"
 ) -> dict[str, list] | None:
     """Tokenize a single conversation item.
 
     Args:
-        item: Conversation item with 'conversations' field
+        item: Conversation item with conversation field (default: 'conversations')
         tokenizer: HuggingFace tokenizer
         format_tokens: Dictionary of format tokens
         format_obj: Format object with role definitions
         max_length: Maximum sequence length
+        conversation_field: Name of the field containing the conversation (default: 'conversations')
+        role_field: Name of the field containing the role (default: 'from')
 
     Returns:
         Dictionary with 'input_ids', 'attention_mask', and 'labels', or None if invalid
     """
     mask_token_id = format_obj.mask_token_id
-    turns = normalize_conversation(item["conversations"], format_obj)
+    
+    # Get conversation turns from the appropriate field
+    if conversation_field not in item:
+        logger.debug(f"Field '{conversation_field}' not found in item. Available fields: {list(item.keys())}")
+        return None
+    
+    turns = normalize_conversation(item[conversation_field], format_obj, role_field)
 
     starting_sequence_tokens = format_tokens["starting_sequence"]["tokens"]
     input_ids = list(starting_sequence_tokens)
@@ -235,7 +272,8 @@ def tokenize_item(
 
 
 def tokenize_dataset(
-    dataset_path: str, tokenizer: Any, format_tokens: dict, format_obj: Any, max_length: int
+    dataset_path: str, tokenizer: Any, format_tokens: dict, format_obj: Any, max_length: int,
+    conversation_field: str = "conversations", role_field: str = "from"
 ) -> list[dict]:
     """Tokenize an entire dataset.
 
@@ -245,6 +283,8 @@ def tokenize_dataset(
         format_tokens: Dictionary of format tokens
         format_obj: Format object
         max_length: Maximum sequence length
+        conversation_field: Name of the field containing the conversation (default: 'conversations')
+        role_field: Name of the field containing the role (default: 'from')
 
     Returns:
         List of tokenized items
@@ -266,7 +306,120 @@ def tokenize_dataset(
     with ThreadPoolExecutor() as executor:
         futures = []
         for item in loaded_data:
-            future = executor.submit(tokenize_item, item, tokenizer, format_tokens, format_obj, max_length)
+            future = executor.submit(tokenize_item, item, tokenizer, format_tokens, format_obj, max_length, conversation_field, role_field)
+            futures.append(future)
+
+            if len(futures) >= executor._max_workers * 2:
+                while futures:
+                    future = futures.pop(0)
+                    try:
+                        result = future.result()
+                        if result is not None:
+                            tokenized_items.append(result)
+                        processed_count += 1
+                        if processed_count % log_interval == 0:
+                            elapsed = time.time() - start_time
+                            logger.info(f"Processed {processed_count} items from {dataset_path}... ({elapsed:.2f}s)")
+                    except Exception as exc:
+                        logger.error(f"An item from {dataset_path} generated an exception during tokenization: {exc}")
+
+        # Process remaining futures
+        logger.info(f"Processing remaining {len(futures)} futures for {dataset_path}...")
+        for future in futures:
+            try:
+                result = future.result()
+                if result is not None:
+                    tokenized_items.append(result)
+                processed_count += 1
+                if processed_count % log_interval == 0:
+                    elapsed = time.time() - start_time
+                    logger.info(f"Processed {processed_count} items from {dataset_path}... ({elapsed:.2f}s)")
+            except Exception as exc:
+                logger.error(f"An item from {dataset_path} generated an exception during final tokenization: {exc}")
+
+    total_time = time.time() - start_time
+    logger.info(f"Finished processing {processed_count} items from {dataset_path} in {total_time:.2f}s")
+
+    return tokenized_items
+
+
+def tokenize_completion_item(
+    item: dict, tokenizer: Any, field: str, max_length: int
+) -> dict[str, list] | None:
+    """Tokenize a single completion/pretraining item.
+
+    Args:
+        item: Data item with text field
+        tokenizer: HuggingFace tokenizer
+        field: Field name to extract text from (default: "text")
+        max_length: Maximum sequence length
+
+    Returns:
+        Dictionary with 'input_ids', 'attention_mask', and 'labels', or None if invalid
+    """
+    # Extract text from the specified field
+    if field not in item:
+        logger.debug(f"Field '{field}' not found in item. Available fields: {list(item.keys())}")
+        return None
+    
+    text = item[field]
+    
+    if not isinstance(text, str) or len(text) == 0:
+        logger.debug(f"Invalid text in field '{field}': {text}")
+        return None
+    
+    # Tokenize the text
+    # Add BOS token if tokenizer has one
+    tokens = tokenizer.encode(text, add_special_tokens=True)
+    
+    # Truncate to max_length if needed
+    if len(tokens) > max_length:
+        tokens = tokens[:max_length]
+    
+    # For completion datasets, we train on everything
+    input_ids = tokens
+    attention_mask = [1] * len(tokens)
+    labels = tokens.copy()
+    
+    return {
+        "input_ids": input_ids,
+        "attention_mask": attention_mask,
+        "labels": labels
+    }
+
+
+def tokenize_completion_dataset(
+    dataset_path: str, tokenizer: Any, field: str, max_length: int
+) -> list[dict]:
+    """Tokenize an entire completion/pretraining dataset.
+
+    Args:
+        dataset_path: HuggingFace dataset path
+        tokenizer: HuggingFace tokenizer
+        field: Field name to extract text from
+        max_length: Maximum sequence length
+
+    Returns:
+        List of tokenized items
+    """
+    logger.info(f"Loading completion dataset {dataset_path} in streaming mode...")
+    try:
+        loaded_data = load_dataset(dataset_path, split="train", streaming=True, trust_remote_code=True)
+    except Exception as e:
+        logger.warning(f"Failed loading {dataset_path} with trust_remote_code=True, trying without: {e}")
+        loaded_data = load_dataset(dataset_path, split="train", streaming=True)
+
+    logger.info(f"Successfully loaded {dataset_path} stream.")
+
+    tokenized_items = []
+    processed_count = 0
+    start_time = time.time()
+    log_interval = 10000
+
+    with ThreadPoolExecutor() as executor:
+        futures = []
+        for item in loaded_data:
+            future = executor.submit(tokenize_completion_item, item, tokenizer, field, max_length)
             futures.append(future)
 
             if len(futures) >= executor._max_workers * 2:

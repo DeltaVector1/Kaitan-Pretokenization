@@ -50,6 +50,9 @@ datasets:
     type: dan-chat-advanced
   - path: Delta-Vector/Hydrus-Claude-Instruct-2.7K
     type: dan-chat-advanced
+  - path: Delta-Vector/Ursa-Armoured-Core-6-Lora-V1-Kimi
+    type: completion
+    field: entry  # field name to extract text from (default: "text")
 
 sequence_len: 8192  # defaults to 8192
 ```
@@ -62,10 +65,11 @@ uv run pretokenization --config CONFIG [OPTIONS]
 Options:
   --config CONFIG      Path to the YAML configuration file (required)
   --output OUTPUT      Path to output parquet file (default: ./output.parquet)
-  --format FORMAT      Skip TUI and use specific format
+  --format FORMAT      Skip TUI and use specific format (for chat datasets)
   --seed SEED          Random seed for reproducibility
   --debug              Enable debug logging
   --hf-push REPO       Push results to HuggingFace repo
+  -y, --yes            Skip confirmation prompt
 ```
 
 ### Examples
@@ -85,6 +89,12 @@ uv run pretokenization --config ./testing.yml --debug
 
 # Push to HuggingFace (requires HF_TOKEN env var)
 uv run pretokenization --config ./testing.yml --hf-push username/dataset-name
+
+# Process completion dataset (pretraining)
+uv run pretokenization --config ./aperus.yml -y
+
+# Mix chat and completion datasets
+uv run pretokenization --config ./mixed.yml --format "ChatML" -y
 ```
 
 ## Adding New Chat Formats
@@ -124,9 +134,13 @@ FORMATS = {
 }
 ```
 
-## Dataset Format
+## Dataset Formats
 
-The tool expects datasets in the "dan-chat-advanced" format:
+The tool supports two dataset types:
+
+### 1. Chat Format (`dan-chat-advanced`)
+
+For instruction/conversation datasets:
 
 ```json
 {
@@ -149,6 +163,22 @@ The tool expects datasets in the "dan-chat-advanced" format:
   ]
 }
 ```
+
+### 2. Completion Format (`completion`)
+
+For pretraining/completion datasets where all tokens are trained on:
+
+```yaml
+datasets:
+  - path: your-username/your-dataset
+    type: completion
+    field: text  # field name containing the text (default: "text")
+```
+
+The completion format will tokenize the specified field and train on all tokens (no masking). This is useful for:
+- Pretraining datasets
+- Completion-only datasets
+- Knowledge/documentation corpora
 
 ## Output Format
 

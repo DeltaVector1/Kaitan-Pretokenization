@@ -56,11 +56,36 @@ tokenizer_type: AutoTokenizer            # Tokenizer type (optional)
 
 datasets:
   - path: PocketDoc/Dans-Systemmaxx               # HuggingFace dataset path
-    type: dan-chat-advanced                        # Dataset format
+    type: dan-chat-advanced                        # Chat dataset format
   - path: Delta-Vector/Hydrus-Claude-Instruct-2.7K
     type: dan-chat-advanced
+  - path: Delta-Vector/Ursa-Armoured-Core-6-Lora-V1-Kimi
+    type: completion                               # Pretraining/completion format
+    field: entry                                   # Field to extract text from
 
 sequence_len: 8192  # Max sequence length (optional, default: 8192)
+```
+
+## Dataset Types
+
+### Chat Datasets (`dan-chat-advanced`)
+For instruction-following and conversational datasets. You'll select a chat format (ChatML, Llama3, etc.) and the tool will:
+- Add special tokens for roles (system, user, assistant)
+- Mask tokens based on the `loss` field in conversations
+- Format multi-turn dialogues
+
+### Completion Datasets (`completion`)
+For pretraining or completion-only datasets. The tool will:
+- Extract text from the specified field (default: `text`)
+- Train on **all tokens** (no masking)
+- Add BOS token if the tokenizer has one
+
+**Example config for completion:**
+```yaml
+datasets:
+  - path: your-dataset/path
+    type: completion
+    field: entry  # or "text", "content", etc.
 ```
 
 ## Understanding the Preview
@@ -117,6 +142,9 @@ uv run pretokenization --config ./testing.yml --seed 42
 # Push to HuggingFace (requires HF_TOKEN environment variable)
 export HF_TOKEN=your_token_here
 uv run pretokenization --config ./testing.yml --hf-push username/dataset-name
+
+# Process completion/pretraining datasets (skip confirmation)
+uv run pretokenization --config ./aperus.yml -y
 ```
 
 ## Output Format
@@ -142,8 +170,8 @@ print(dataset["train"][0])
 
 ## Troubleshooting
 
-### "No datasets with type 'dan-chat-advanced' found"
-Make sure your YAML has datasets with `type: dan-chat-advanced`
+### "No datasets with type 'dan-chat-advanced' or 'completion' found"
+Make sure your YAML has datasets with `type: dan-chat-advanced` (for chat) or `type: completion` (for pretraining)
 
 ### "Failed to load dataset"
 - Check the dataset path is correct

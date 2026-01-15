@@ -37,7 +37,7 @@ class BaseChatFormat(ABC):
     @property
     def tool_from_values(self) -> list[str]:
         """Return the list of valid tool role identifiers."""
-        return ["tool", "function"]
+        return ["tool", "function", "environment"]
 
     @property
     def mask_token_id(self) -> int:
